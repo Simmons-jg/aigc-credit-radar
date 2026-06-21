@@ -1,0 +1,78 @@
+{
+  "name": "aigc-credit-radar",
+  "version": "0.0.1",
+  "description": "Local-first desktop radar for expiring AIGC platform credits.",
+  "author": "AIGC Credit Radar Contributors",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "dev": "tsx scripts/dev-with-service.ts",
+    "dev:ui": "vite --host 127.0.0.1",
+    "build": "tsc -b && vite build",
+    "build:desktop": "npm run build && node scripts/generate-app-icon.mjs && node scripts/build-desktop.mjs",
+    "desktop": "npm run build:desktop && electron .",
+    "pack:desktop": "npm run build:desktop && node scripts/pack-desktop-folder.mjs",
+    "release:win": "npm run pack:desktop && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-win-release.ps1",
+    "dist": "npm run build:desktop && electron-builder",
+    "repair:electron": "node scripts/repair-electron-install.mjs",
+    "preview": "vite preview --host 127.0.0.1",
+    "helper": "tsx scripts/local-helper.ts",
+    "test": "node --import tsx --test scripts/devLauncher.test.ts scripts/desktopPackaging.test.ts extensions/aigc-credit-radar-browser/autoCapture.test.ts src/adapters/higgsfieldCli.test.ts src/adapters/dreaminaCli.test.ts src/adapters/dreaminaInstaller.test.ts src/adapters/browserSession.test.ts src/adapters/browserExtension.test.ts src/adapters/browserExtensionInstall.test.ts src/adapters/bookmarkletConnector.test.ts src/data/realMode.test.ts src/data/connectors.test.ts src/i18n.test.ts src/lib/risk.test.ts src/lib/resetRuleForm.test.ts src/lib/scheduler.test.ts src/lib/persistence.test.ts src/lib/accountRecords.test.ts src/lib/clipboardImage.test.ts src/lib/dreaminaFlow.test.ts src/lib/connectionInitialState.test.ts src/lib/connectionServiceHealth.test.ts src/lib/browserConnectionStatus.test.ts src/lib/localServiceCors.test.ts src/lib/monitorSummary.test.ts"
+  },
+  "build": {
+    "appId": "com.aigc.creditradar",
+    "productName": "AIGC Credit Radar",
+    "directories": {
+      "output": "release"
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "public/**/*",
+      "extensions/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "public/aigc-credit-radar-icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    }
+  },
+  "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "gsap": "^3.15.0",
+    "lucide-react": "^0.561.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.16"
+  }
+}

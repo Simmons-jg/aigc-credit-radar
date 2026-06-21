@@ -16,8 +16,21 @@ test("parseBrowserCreditText extracts a TapNow-style token balance", () => {
   assert.equal(result?.currencyLabel, "tokens");
 });
 
+test("parseBrowserCreditText extracts a short OCR-only balance", () => {
+  const result = parseBrowserCreditText("Credits 5717");
+
+  assert.equal(result?.creditsRemaining, 5717);
+  assert.equal(result?.currencyLabel, "credits");
+});
+
 test("parseBrowserCreditText rejects text without a balance-like label", () => {
   const result = parseBrowserCreditText("Starter plan includes 2,000 monthly credits");
+
+  assert.equal(result, undefined);
+});
+
+test("parseBrowserCreditText rejects ambiguous OCR text with multiple numbers", () => {
+  const result = parseBrowserCreditText("Credits 5717 / 10000");
 
   assert.equal(result, undefined);
 });

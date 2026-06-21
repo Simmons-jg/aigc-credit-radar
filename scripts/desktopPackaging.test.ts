@@ -21,3 +21,8 @@ test("desktop packer stamps the app icon and product label into the Windows exec
   assert.match(source, /FileDescription/);
   assert.match(source, /ProductName/);
 });
+
+test("desktop packer keeps OCR assets only in the built renderer output", async () => {
+  const source = await readFile(new URL("./pack-desktop-folder.mjs", import.meta.url), "utf8");
+  assert.match(source, /public", "ocr"/);
+});

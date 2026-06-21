@@ -7,8 +7,12 @@
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
+    "prepare:ocr": "node scripts/prepare-ocr-assets.mjs",
+    "predev": "npm run prepare:ocr",
     "dev": "tsx scripts/dev-with-service.ts",
+    "predev:ui": "npm run prepare:ocr",
     "dev:ui": "vite --host 127.0.0.1",
+    "prebuild": "npm run prepare:ocr",
     "build": "tsc -b && vite build",
     "build:desktop": "npm run build && node scripts/generate-app-icon.mjs && node scripts/build-desktop.mjs",
     "desktop": "npm run build:desktop && electron .",
@@ -18,7 +22,7 @@
     "repair:electron": "node scripts/repair-electron-install.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "helper": "tsx scripts/local-helper.ts",
-    "test": "node --import tsx --test scripts/devLauncher.test.ts scripts/desktopPackaging.test.ts extensions/aigc-credit-radar-browser/autoCapture.test.ts src/adapters/higgsfieldCli.test.ts src/adapters/dreaminaCli.test.ts src/adapters/dreaminaInstaller.test.ts src/adapters/browserSession.test.ts src/adapters/browserExtension.test.ts src/adapters/browserExtensionInstall.test.ts src/adapters/bookmarkletConnector.test.ts src/data/realMode.test.ts src/data/connectors.test.ts src/i18n.test.ts src/lib/risk.test.ts src/lib/resetRuleForm.test.ts src/lib/scheduler.test.ts src/lib/persistence.test.ts src/lib/accountRecords.test.ts src/lib/clipboardImage.test.ts src/lib/dreaminaFlow.test.ts src/lib/connectionInitialState.test.ts src/lib/connectionServiceHealth.test.ts src/lib/browserConnectionStatus.test.ts src/lib/localServiceCors.test.ts src/lib/monitorSummary.test.ts"
+    "test": "node --import tsx --test scripts/devLauncher.test.ts scripts/desktopPackaging.test.ts extensions/aigc-credit-radar-browser/autoCapture.test.ts src/adapters/higgsfieldCli.test.ts src/adapters/dreaminaCli.test.ts src/adapters/dreaminaInstaller.test.ts src/adapters/browserSession.test.ts src/adapters/browserExtension.test.ts src/adapters/browserExtensionInstall.test.ts src/adapters/bookmarkletConnector.test.ts src/data/realMode.test.ts src/data/connectors.test.ts src/i18n.test.ts src/lib/risk.test.ts src/lib/resetRuleForm.test.ts src/lib/scheduler.test.ts src/lib/persistence.test.ts src/lib/accountRecords.test.ts src/lib/clipboardImage.test.ts src/lib/ocrAssets.test.ts src/lib/dreaminaFlow.test.ts src/lib/connectionInitialState.test.ts src/lib/connectionServiceHealth.test.ts src/lib/browserConnectionStatus.test.ts src/lib/localServiceCors.test.ts src/lib/monitorSummary.test.ts"
   },
   "build": {
     "appId": "com.aigc.creditradar",
@@ -33,6 +37,7 @@
       "dist/**/*",
       "dist-electron/**/*",
       "public/**/*",
+      "!public/ocr/**/*",
       "extensions/**/*",
       "package.json"
     ],

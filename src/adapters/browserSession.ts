@@ -20,6 +20,9 @@ const marketingTextPatterns = [
   /(?:定价|套餐|每月积分|包含积分)/i,
 ];
 
+const standaloneNumberPattern = /(^|[^\d.])([0-9][0-9,]*(?:\.\d+)?)(?![\d.])/g;
+const shortOcrTextLimit = 160;
+
 export function parseBrowserCreditText(raw: string): BrowserCreditParseResult | undefined {
   const normalized = raw.replace(/\s+/g, " ").trim();
   if (!normalized) return undefined;
@@ -46,6 +49,9 @@ export function parseBrowserCreditText(raw: string): BrowserCreditParseResult | 
     }
   }
 
+  const standaloneBalance = parseStandaloneOcrBalance(normalized);
+  if (standaloneBalance) return standaloneBalance;
+
   return undefined;
 }
 
@@ -60,4 +66,19 @@ function inferCurrencyLabel(value: string) {
 function looksLikeMarketingPlan(text: string, matchIndex: number) {
   const window = text.slice(Math.max(0, matchIndex - 80), matchIndex + 120);
   return marketingTextPatterns.some((pattern) => pattern.test(window));
+}
+
+function parseStandaloneOcrBalance(text: string): BrowserCreditParseResult | undefined {
+  if (text.length > shortOcrTextLimit || looksLikeMarketingPlan(text, 0)) return undefined;
+
+  const matches = [...text.matchAll(standaloneNumberPattern)];
+  if (matches.length !== 1) return undefined;
+
+  const match = matches[0];
+  const amount = match[2];
+  return {
+    creditsRemaining: normalizeAmount(amount),
+    currencyLabel: inferCurrencyLabel(text),
+    matchedText: match[0].trim(),
+  };
 }

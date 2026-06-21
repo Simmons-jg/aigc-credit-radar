@@ -41,6 +41,7 @@ await mkdir(appDir, { recursive: true });
 await cp(resolve(root, "dist"), resolve(appDir, "dist"), { recursive: true });
 await cp(resolve(root, "dist-electron"), resolve(appDir, "dist-electron"), { recursive: true });
 await cp(resolve(root, "public"), resolve(appDir, "public"), { recursive: true });
+await rm(resolve(appDir, "public", "ocr"), { recursive: true, force: true });
 await cp(resolve(root, "extensions"), resolve(appDir, "extensions"), { recursive: true });
 
 await writeFile(

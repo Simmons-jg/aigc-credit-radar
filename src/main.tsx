@@ -52,6 +52,7 @@ import { browserConnectionFromStatus } from "./lib/browserConnectionStatus";
 import { browserConnectionStatesFromRecords, connectionStateFromRecord } from "./lib/connectionInitialState";
 import { createMonitorSummary, type MonitorSummary } from "./lib/monitorSummary";
 import { imageFileFromClipboardItems } from "./lib/clipboardImage";
+import { createTesseractOcrOptions, ocrErrorMessage } from "./lib/ocrAssets";
 import {
   primaryAccountId,
   removeAccountRecord,
@@ -89,6 +90,16 @@ const languageKey = "aigc-credit-radar-language";
 const helperBaseUrl = "http://127.0.0.1:8787";
 
 gsap.registerPlugin(useGSAP);
+
+type OcrProgress = {
+  status?: string;
+  progress?: number;
+};
+
+type OcrWorker = {
+  recognize: (image: File) => Promise<{ data: { text: string } }>;
+  terminate: () => Promise<unknown>;
+};
 
 type HiggsfieldConnectionState = ConnectorConnectionState;
 
@@ -2044,12 +2055,26 @@ function BrowserBalanceImport({
     if (!file) return;
     setOcrBusy(true);
     setMessage(language === "zh" ? "正在识别截图，第一次可能会慢一点..." : "Reading screenshot. The first OCR run may take a bit...");
+    let worker: OcrWorker | undefined;
 
     try {
       const { createWorker } = await import("tesseract.js");
-      const worker = await createWorker("eng");
+      worker = (await createWorker("eng", 1, {
+        ...createTesseractOcrOptions(),
+        logger: (progress: OcrProgress) => {
+          if (!progress.status) return;
+          if (progress.status === "loading language traineddata") {
+            setMessage(language === "zh" ? "正在加载本地 OCR 模型..." : "Loading the local OCR model...");
+            return;
+          }
+
+          if (progress.status === "recognizing text" && typeof progress.progress === "number") {
+            const percent = Math.max(0, Math.min(100, Math.round(progress.progress * 100)));
+            setMessage(language === "zh" ? `正在识别截图 ${percent}%...` : `Reading screenshot ${percent}%...`);
+          }
+        },
+      })) as OcrWorker;
       const result = await worker.recognize(file);
-      await worker.terminate();
       const text = result.data.text.trim();
       setPageText(text);
 
@@ -2067,9 +2092,16 @@ function BrowserBalanceImport({
           ? `OCR 已识别：${parsed.creditsRemaining} ${parsed.currencyLabel}`
           : `OCR detected: ${parsed.creditsRemaining} ${parsed.currencyLabel}`,
       );
-    } catch {
-      setMessage(language === "zh" ? "OCR 没有跑起来；先手动填写余额即可。" : "OCR did not start. You can enter the balance manually for now.");
+    } catch (error) {
+      console.error("OCR failed", error);
+      const detail = ocrErrorMessage(error);
+      setMessage(
+        language === "zh"
+          ? `OCR 没有加载成功：${detail}。可以先手动填写余额。`
+          : `OCR did not load: ${detail}. You can enter the balance manually for now.`,
+      );
     } finally {
+      await worker?.terminate().catch((error) => console.error("OCR worker terminate failed", error));
       setOcrBusy(false);
     }
   };

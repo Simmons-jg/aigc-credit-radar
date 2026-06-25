@@ -162,6 +162,34 @@ test("mergeStoredRecords preserves default manual imports after app restart", ()
   assert.equal(mergedLovart?.snapshot?.creditsRemaining, 5717);
 });
 
+test("mergeStoredRecords preserves configured credit totals for default accounts", () => {
+  const storedHiggsfield: PlatformRecord = {
+    ...realModeRecords[0],
+    account: {
+      ...realModeRecords[0].account,
+      authState: "ready",
+      tracked: true,
+      configuredCreditsTotal: 6000,
+    },
+    snapshot: {
+      id: "snap-higgsfield-main",
+      accountId: "higgsfield-main",
+      creditsRemaining: 816.54,
+      currencyLabel: "credits",
+      capturedAt: "2026-06-25T09:00:00+08:00",
+      confidence: "verified",
+    },
+    nextRunAt: "",
+    cadence: "daily",
+  };
+
+  const merged = mergeStoredRecords(realModeRecords, [storedHiggsfield]);
+  const mergedHiggsfield = merged.find((record) => record.account.id === "higgsfield-main");
+
+  assert.equal(mergedHiggsfield?.account.configuredCreditsTotal, 6000);
+  assert.equal(mergedHiggsfield?.snapshot?.creditsRemaining, 816.54);
+});
+
 test("loadPlatformRecords migrates existing localStorage records into desktop storage", () => {
   const jimeng = realModeRecords.find((record) => record.account.platform === "jimeng");
   assert.ok(jimeng);

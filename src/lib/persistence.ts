@@ -30,6 +30,7 @@ export function mergeStoredRecords(defaultRecords: PlatformRecord[], storedRecor
         enabled: stored.account.enabled ?? defaultRecord.account.enabled,
         resetRule: stored.account.resetRule,
         tracked: stored.account.tracked,
+        configuredCreditsTotal: stored.account.configuredCreditsTotal,
       },
       snapshot: stored.snapshot,
       lastRun: stored.lastRun,

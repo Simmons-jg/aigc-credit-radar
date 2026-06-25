@@ -1096,6 +1096,10 @@ a {
   text-align: right;
 }
 
+.ledger-compute {
+  gap: 7px;
+}
+
 .ledger-points strong,
 .compute-line strong,
 .ledger-reset strong,
@@ -1151,6 +1155,54 @@ a {
 
 .compute-bar.unknown span {
   background: transparent;
+}
+
+.credits-total-editor {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.credits-total-editor span {
+  color: var(--subtle);
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.credits-total-editor input {
+  width: 112px;
+  min-height: 30px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.78);
+  color: var(--ink);
+  outline: 0;
+  padding: 0 9px;
+  text-align: right;
+}
+
+.credits-total-editor input:focus {
+  border-color: rgb(8 117 104 / 0.48);
+  box-shadow: 0 0 0 3px rgb(8 117 104 / 0.12);
+}
+
+.credits-total-editor small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 720;
+}
+
+.credits-total-editor.error input {
+  border-color: rgb(180 35 24 / 0.34);
+  box-shadow: 0 0 0 3px rgb(180 35 24 / 0.08);
+}
+
+.credits-total-editor.error small {
+  color: var(--critical);
 }
 
 .ledger-reset,

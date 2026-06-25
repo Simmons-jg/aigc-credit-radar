@@ -61,7 +61,7 @@ import {
   visibleAccountRecords,
 } from "./lib/accountRecords";
 import { loadPlatformRecords, savePlatformRecords } from "./lib/persistence";
-import { formatDate, formatRelative, formatShortTime, rankRecords } from "./lib/risk";
+import { effectiveCreditsTotal, formatDate, formatRelative, formatShortTime, rankRecords } from "./lib/risk";
 import { clampResetDay, clampResetMonth, resetRuleFormState } from "./lib/resetRuleForm";
 import {
   createRiskReminderCandidates,
@@ -584,6 +584,22 @@ function App() {
     );
   };
 
+  const setConfiguredCreditsTotal = (accountId: string, configuredCreditsTotal?: number) => {
+    setRecords((current) =>
+      current.map((record) =>
+        record.account.id === accountId
+          ? {
+              ...record,
+              account: {
+                ...record.account,
+                configuredCreditsTotal,
+              },
+            }
+          : record,
+      ),
+    );
+  };
+
   const addAccount = (platform: string) => {
     setRecords((current) => trackAccountPlatform(current, platform));
     void connectPlatform(platform, "connect");
@@ -618,6 +634,7 @@ function App() {
           authState: "ready",
           enabled: true,
           tracked: true,
+          configuredCreditsTotal: input.creditsTotal ?? record?.account.configuredCreditsTotal,
           docsUrl: input.homepageUrl || record?.account.docsUrl,
         },
         snapshot: {
@@ -1260,6 +1277,7 @@ function App() {
                   onConnectPlatform={connectPlatform}
                   onManualUpdate={openManualImportPanel}
                   onRemoveAccount={removeAccount}
+                  onSetConfiguredCreditsTotal={setConfiguredCreditsTotal}
                   onSetResetRule={setResetRule}
                 />
               ))}
@@ -2336,6 +2354,7 @@ function RiskCard({
   onConnectPlatform,
   onManualUpdate,
   onRemoveAccount,
+  onSetConfiguredCreditsTotal,
   onSetResetRule,
 }: {
   record: PlatformRecord;
@@ -2344,6 +2363,7 @@ function RiskCard({
   onConnectPlatform: (platform: string, mode?: "connect" | "refresh") => Promise<void>;
   onManualUpdate: () => void;
   onRemoveAccount: (accountId: string) => void;
+  onSetConfiguredCreditsTotal: (accountId: string, configuredCreditsTotal?: number) => void;
   onSetResetRule: (accountId: string, resetRule: ResetRule) => void;
 }) {
   const strings = t(language);
@@ -2351,7 +2371,8 @@ function RiskCard({
   const confidence = record.snapshot?.confidence;
   const [rowBusy, setRowBusy] = useState(false);
   const isManualAdapter = record.account.adapterKind === "manual";
-  const hasKnownTotal = typeof record.snapshot?.creditsTotal === "number" && record.snapshot.creditsTotal > 0;
+  const creditsTotal = effectiveCreditsTotal(record);
+  const hasKnownTotal = typeof creditsTotal === "number" && creditsTotal > 0;
   const unusedPercent = hasKnownTotal && risk.unusedRatio !== undefined ? Math.round(risk.unusedRatio * 100) : undefined;
   const computeLabel = unusedPercent === undefined ? "--" : `${unusedPercent}%`;
   const computeWidth = `${Math.max(0, Math.min(100, unusedPercent ?? 0))}%`;
@@ -2455,6 +2476,13 @@ function RiskCard({
         <div className={`compute-bar ${hasKnownTotal ? "" : "unknown"}`} aria-hidden="true">
           <span style={{ width: waitingSnapshot ? "0%" : computeWidth }} />
         </div>
+        <CreditsTotalEditor
+          balance={record.snapshot?.creditsRemaining}
+          detectedTotal={record.snapshot?.creditsTotal}
+          language={language}
+          value={record.account.configuredCreditsTotal}
+          onChange={(value) => onSetConfiguredCreditsTotal(record.account.id, value)}
+        />
       </div>
 
       <div className="ledger-reset" role="cell">
@@ -2501,6 +2529,76 @@ function RiskCard({
         </button>
       </div>
     </article>
+  );
+}
+
+function CreditsTotalEditor({
+  balance,
+  detectedTotal,
+  language,
+  onChange,
+  value,
+}: {
+  balance?: number;
+  detectedTotal?: number;
+  language: Language;
+  onChange: (configuredCreditsTotal?: number) => void;
+  value?: number;
+}) {
+  const [draft, setDraft] = useState(value === undefined ? "" : String(value));
+
+  useEffect(() => {
+    setDraft(value === undefined ? "" : String(value));
+  }, [value]);
+
+  const parsed = draft.trim() ? parseImportNumber(draft) : undefined;
+  const invalidNumber = draft.trim() !== "" && parsed === undefined;
+  const belowBalance = parsed !== undefined && balance !== undefined && parsed < balance;
+  const hasError = invalidNumber || belowBalance;
+  const helperText = hasError
+    ? belowBalance
+      ? language === "zh"
+        ? "不能低于当前余额"
+        : "Must be at least the balance"
+      : language === "zh"
+        ? "请输入有效数字"
+        : "Enter a valid number"
+    : language === "zh"
+      ? "填后自动重算"
+      : "Recalculates automatically";
+  const placeholder =
+    detectedTotal && detectedTotal > 0
+      ? language === "zh"
+        ? `已识别 ${detectedTotal}`
+        : `Detected ${detectedTotal}`
+      : language === "zh"
+        ? "例如 6000"
+        : "e.g. 6000";
+
+  return (
+    <label className={`credits-total-editor ${hasError ? "error" : ""}`}>
+      <span>{language === "zh" ? "总额度" : "Total quota"}</span>
+      <input
+        inputMode="decimal"
+        placeholder={placeholder}
+        value={draft}
+        onChange={(event) => {
+          const nextDraft = event.currentTarget.value;
+          const nextParsed = nextDraft.trim() ? parseImportNumber(nextDraft) : undefined;
+          setDraft(nextDraft);
+
+          if (!nextDraft.trim()) {
+            onChange(undefined);
+            return;
+          }
+
+          if (nextParsed !== undefined && (balance === undefined || nextParsed >= balance)) {
+            onChange(nextParsed);
+          }
+        }}
+      />
+      <small>{helperText}</small>
+    </label>
   );
 }
 

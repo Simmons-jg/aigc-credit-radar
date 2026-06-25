@@ -75,6 +75,16 @@ export function daysUntil(date: Date, now = currentTime()): number {
   return Math.max(0, Math.ceil(ms / 86_400_000));
 }
 
+export function effectiveCreditsTotal(record: PlatformRecord) {
+  const configuredTotal = record.account.configuredCreditsTotal;
+  if (typeof configuredTotal === "number" && configuredTotal > 0) return configuredTotal;
+
+  const snapshotTotal = record.snapshot?.creditsTotal;
+  if (typeof snapshotTotal === "number" && snapshotTotal > 0) return snapshotTotal;
+
+  return undefined;
+}
+
 function riskLevelForDays(daysToReset: number): Exclude<RiskLevel, "unknown"> {
   if (daysToReset <= 1) return "veryCritical";
   if (daysToReset <= 3) return "critical";
@@ -87,7 +97,7 @@ export function assessRisk(record: PlatformRecord, now = currentTime()): RiskAss
   const resetDate = resolveRecordResetDate(record, now);
   const daysToReset = daysUntil(resetDate, now);
   const remaining = record.snapshot?.creditsRemaining ?? 0;
-  const total = record.snapshot?.creditsTotal;
+  const total = effectiveCreditsTotal(record);
   const unusedRatio = total ? remaining / total : undefined;
   const hasCredits = remaining > 0;
   const authBlocked = record.account.authState === "needs_auth";

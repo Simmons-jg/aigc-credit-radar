@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { assessRisk, resolveRecordResetDate, resolveResetDate } from "./risk";
+import { assessRisk, effectiveCreditsTotal, resolveRecordResetDate, resolveResetDate } from "./risk";
 import type { PlatformRecord } from "../types";
 
 test("resolveRecordResetDate prefers user fixed date over inferred snapshot reset", () => {
@@ -150,4 +150,35 @@ test("assessRisk does not infer a remaining ratio when total credits are unknown
   };
 
   assert.equal(assessRisk(record, now).unusedRatio, undefined);
+});
+
+test("assessRisk uses the account configured total when snapshot total is missing", () => {
+  const now = new Date("2026-06-21T10:00:00+08:00");
+  const record: PlatformRecord = {
+    account: {
+      id: "higgsfield-main",
+      platform: "higgsfield",
+      label: "Higgsfield",
+      adapterKind: "cli",
+      adapterLabel: "Official CLI adapter",
+      authState: "ready",
+      resetRule: { type: "monthly_day", dayOfMonth: 7, timezone: "Asia/Shanghai" },
+      enabled: true,
+      tracked: true,
+      configuredCreditsTotal: 1000,
+    },
+    snapshot: {
+      id: "snap-higgsfield",
+      accountId: "higgsfield-main",
+      creditsRemaining: 816.54,
+      currencyLabel: "credits",
+      capturedAt: now.toISOString(),
+      confidence: "verified",
+    },
+    nextRunAt: "",
+    cadence: "daily",
+  };
+
+  assert.equal(effectiveCreditsTotal(record), 1000);
+  assert.equal(Math.round((assessRisk(record, now).unusedRatio ?? 0) * 100), 82);
 });

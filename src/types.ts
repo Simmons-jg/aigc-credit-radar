@@ -26,6 +26,7 @@ export interface PlatformAccount {
   resetRule: ResetRule;
   enabled: boolean;
   tracked?: boolean;
+  configuredCreditsTotal?: number;
   docsUrl?: string;
 }
 

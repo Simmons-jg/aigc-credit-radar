@@ -1,8 +1,36 @@
 # AIGC Credit Radar
 
+AIGC Credit Radar 是一款本地优先的 AIGC 积分过期监控桌面应用。它帮多平台订阅用户集中查看各个平台还剩多少积分、什么时候重置、哪些积分最可能被浪费。
+
 AIGC Credit Radar is a local-first desktop monitor for expiring AI generation credits. It helps people who subscribe to multiple AIGC platforms see which balances are about to reset, when the data was last checked, and what needs attention first.
 
-中文一句话：这是一个“积分过期监控仪”，重点不是记账，而是每天帮你看哪些平台的可用积分可能快浪费了。
+## 中文功能说明
+
+这是一个“积分过期风险雷达”，重点不是记账，而是每天提醒你：哪些 AIGC 平台还有余额、快到重置日、应该先用掉。
+
+- 真实自动连接：Higgsfield 通过官方 CLI 读取余额；即梦 / Jimeng 通过官方 Dreamina CLI 读取积分。
+- 手动导入：Lovart、TapNow、OpenArt、LibTV、Kling、Shotlab、Updream，以及自定义平台都可以手动录入余额。
+- OCR 辅助：可以上传截图，也可以复制截图后在 OCR 区域按 `Ctrl+V` 粘贴，辅助识别余额数字。
+- 重置规则：支持每月几号重置、每年固定日期重置、手动指定下一次重置日。
+- 风险提醒：10 天内仍有余额会进入提醒窗口；7 天内页面变红；3 天和 1 天内会触发更强提醒。
+- 桌面提醒：桌面通知、托盘小窗、红色警报横幅会一起提示快过期积分。
+- 本地优先：数据保存在本机，应用不会要求用户输入平台密码，也不会把账号密钥上传到服务器。
+- 中英双语：界面支持中文 / English 一键切换。
+
+## 下载体验
+
+Windows 用户可以从 Release 下载当前构建：
+
+[Download AIGC Credit Radar for Windows](https://github.com/Simmons-jg/aigc-credit-radar/releases/download/v0.0.1/AIGC-Credit-Radar-0.0.1-win-x64.zip)
+
+解压后运行 `AIGC Credit Radar.exe`。如果系统提示未知来源，这是因为当前版本还没有做代码签名。
+
+## 真实边界
+
+- 这个项目不是“万能网页爬虫”。没有公开 CLI / API / MCP 的平台，目前默认走手动导入或 OCR 辅助。
+- 纯 GitHub Pages 静态网页不能运行本地 CLI、不能长期后台提醒，也不能帮用户保存本地桌面状态，所以完整功能以桌面 App 为主。
+- 自动检查需要桌面 App 运行中。应用退出后仍然后台定时运行是后续版本目标。
+- 平台登录状态、OAuth、API key 都属于账号私密信息，不应该提交到 GitHub，也不应该由应用索要平台密码。
 
 ## What Works Today
 
@@ -10,7 +38,8 @@ AIGC Credit Radar is a local-first desktop monitor for expiring AI generation cr
 - Web UI for development and portfolio demos.
 - Higgsfield real connector through the official local CLI.
 - Jimeng / Dreamina real connector through the official Dreamina CLI.
-- Manual import for platforms without a stable CLI/API/MCP connector, such as Lovart, TapNow, LibTV, Kling, Shotlab, and custom platforms.
+- Manual import for platforms without a stable CLI/API/MCP connector, such as Lovart, TapNow, OpenArt, LibTV, Kling, Shotlab, Updream, and custom platforms.
+- Screenshot OCR import by file upload or pasted clipboard image.
 - User-configured reset rules: monthly day, yearly date, or manual next reset date.
 - Risk windows based on days left and remaining balance:
   - Very critical: 1 day or less
@@ -18,7 +47,7 @@ AIGC Credit Radar is a local-first desktop monitor for expiring AI generation cr
   - High: 7 days or less
   - Medium: 10 days or less
 - In-app automatic daily checks while the app is running.
-- Browser notification reminders after the user grants notification permission.
+- Desktop notification reminders, tray status, mini radar window, and red in-app alert state for near-reset accounts.
 - Bilingual UI: Chinese / English.
 
 ## Honest Limits

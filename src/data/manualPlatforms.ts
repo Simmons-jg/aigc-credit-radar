@@ -29,6 +29,12 @@ export const manualPlatformOptions: ManualPlatformOption[] = [
     websiteUrl: "https://app.tapnow.ai/",
   },
   {
+    id: "updream",
+    labels: { zh: "Updream", en: "Updream" },
+    defaultUnit: "credits",
+    websiteUrl: "https://www.updream.cn/",
+  },
+  {
     id: "libtv",
     labels: { zh: "LibTV / Liblib", en: "LibTV / Liblib" },
     defaultUnit: "credits",
@@ -44,6 +50,7 @@ export const manualPlatformOptions: ManualPlatformOption[] = [
     id: "shotlab",
     labels: { zh: "ShotLab", en: "ShotLab" },
     defaultUnit: "credits",
+    websiteUrl: "https://aigc.xinpianchang.com/",
   },
 ];
 

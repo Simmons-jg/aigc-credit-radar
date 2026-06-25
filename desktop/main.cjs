@@ -1,4 +1,5 @@
-const { app, BrowserWindow, dialog, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
+const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -6,6 +7,53 @@ const { pathToFileURL } = require("node:url");
 const helperBaseUrl = "http://127.0.0.1:8787";
 let mainWindow;
 let helperModule;
+
+function storageFilePath() {
+  return path.join(app.getPath("userData"), "storage.json");
+}
+
+function isAllowedStorageKey(key) {
+  return typeof key === "string" && key.startsWith("aigc-credit-radar-");
+}
+
+function readStorageFile() {
+  try {
+    const raw = fs.readFileSync(storageFilePath(), "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStorageFile(data) {
+  fs.mkdirSync(path.dirname(storageFilePath()), { recursive: true });
+  fs.writeFileSync(storageFilePath(), `${JSON.stringify(data, null, 2)}\n`);
+}
+
+function registerStorageHandlers() {
+  ipcMain.on("aigc-credit-radar:storage-get", (event, key) => {
+    if (!isAllowedStorageKey(key)) {
+      event.returnValue = null;
+      return;
+    }
+
+    const value = readStorageFile()[key];
+    event.returnValue = typeof value === "string" ? value : null;
+  });
+
+  ipcMain.on("aigc-credit-radar:storage-set", (event, key, value) => {
+    if (!isAllowedStorageKey(key) || typeof value !== "string") {
+      event.returnValue = false;
+      return;
+    }
+
+    const data = readStorageFile();
+    data[key] = value;
+    writeStorageFile(data);
+    event.returnValue = true;
+  });
+}
 
 app.setAppUserModelId("com.aigc.creditradar");
 
@@ -56,6 +104,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, "preload.cjs"),
       sandbox: true,
     },
   });
@@ -74,9 +123,16 @@ function createWindow() {
 
     mainWindow.webContents.once("did-finish-load", async () => {
       try {
-        const rendered = await mainWindow.webContents.executeJavaScript(
-          "Boolean(document.querySelector('#root')?.children.length)",
-        );
+        const storageSmoke = process.env.AIGC_CREDIT_RADAR_ELECTRON_STORAGE_SMOKE === "1";
+        const rendered = await mainWindow.webContents.executeJavaScript(`
+          (() => {
+            const hasRoot = Boolean(document.querySelector('#root')?.children.length);
+            if (!hasRoot) return false;
+            if (${JSON.stringify(storageSmoke)} !== true) return true;
+            window.aigcCreditRadarStorage?.setItem("aigc-credit-radar-smoke", "ok");
+            return window.aigcCreditRadarStorage?.getItem("aigc-credit-radar-smoke") === "ok";
+          })()
+        `);
         process.exitCode = rendered ? 0 : 1;
       } catch (error) {
         console.error(error instanceof Error ? error.message : error);
@@ -107,6 +163,7 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  registerStorageHandlers();
   await startBundledHelper();
 
   if (process.env.AIGC_CREDIT_RADAR_ELECTRON_SMOKE === "1") {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mergeStoredRecords } from "./persistence";
+import { loadPlatformRecords, mergeStoredRecords, savePlatformRecords, type StorageLike } from "./persistence";
 import { realModeRecords } from "../data/realMode";
 import type { PlatformRecord } from "../types";
 
@@ -128,3 +128,89 @@ test("mergeStoredRecords preserves custom manual import accounts with snapshots"
   assert.equal(merged.at(-1)?.account.label, "Seko");
   assert.equal(merged.at(-1)?.snapshot?.creditsRemaining, 3600);
 });
+
+test("mergeStoredRecords preserves default manual imports after app restart", () => {
+  const lovart = realModeRecords.find((record) => record.account.platform === "lovart");
+  assert.ok(lovart);
+
+  const storedLovart: PlatformRecord = {
+    ...lovart,
+    account: {
+      ...lovart.account,
+      authState: "ready",
+      tracked: true,
+      resetRule: { type: "monthly_day", dayOfMonth: 7, timezone: "Asia/Shanghai" },
+    },
+    snapshot: {
+      id: "snap-lovart-main",
+      accountId: "lovart-main",
+      creditsRemaining: 5717,
+      currencyLabel: "credits",
+      capturedAt: "2026-06-25T09:00:00+08:00",
+      confidence: "estimated",
+    },
+    nextRunAt: "",
+    cadence: "paused",
+  };
+
+  const merged = mergeStoredRecords(realModeRecords, [storedLovart]);
+  const mergedLovart = merged.find((record) => record.account.id === "lovart-main");
+
+  assert.equal(mergedLovart?.account.authState, "ready");
+  assert.equal(mergedLovart?.account.resetRule.type, "monthly_day");
+  assert.equal(mergedLovart?.account.resetRule.dayOfMonth, 7);
+  assert.equal(mergedLovart?.snapshot?.creditsRemaining, 5717);
+});
+
+test("loadPlatformRecords migrates existing localStorage records into desktop storage", () => {
+  const jimeng = realModeRecords.find((record) => record.account.platform === "jimeng");
+  assert.ok(jimeng);
+  const storedJimeng: PlatformRecord = {
+    ...jimeng,
+    account: {
+      ...jimeng.account,
+      authState: "ready",
+      tracked: true,
+      resetRule: { type: "monthly_day", dayOfMonth: 19, timezone: "Asia/Shanghai" },
+    },
+  };
+  const localStorage = memoryStorage({ "aigc-credit-radar-records": JSON.stringify([storedJimeng]) });
+  const desktopStorage = memoryStorage();
+  const previousWindow = globalThis.window;
+  globalThis.window = { localStorage, aigcCreditRadarStorage: desktopStorage } as unknown as Window & typeof globalThis;
+
+  try {
+    const loaded = loadPlatformRecords(realModeRecords);
+    const loadedJimeng = loaded.find((record) => record.account.id === "jimeng-main");
+
+    assert.equal(loadedJimeng?.account.resetRule.type, "monthly_day");
+    assert.equal(loadedJimeng?.account.resetRule.dayOfMonth, 19);
+    assert.equal(desktopStorage.getItem("aigc-credit-radar-records"), JSON.stringify([storedJimeng]));
+  } finally {
+    globalThis.window = previousWindow;
+  }
+});
+
+test("savePlatformRecords writes to desktop storage when available", () => {
+  const localStorage = memoryStorage();
+  const desktopStorage = memoryStorage();
+  const previousWindow = globalThis.window;
+  globalThis.window = { localStorage, aigcCreditRadarStorage: desktopStorage } as unknown as Window & typeof globalThis;
+
+  try {
+    savePlatformRecords(realModeRecords);
+
+    assert.equal(localStorage.getItem("aigc-credit-radar-records"), null);
+    assert.ok(desktopStorage.getItem("aigc-credit-radar-records")?.includes("higgsfield-main"));
+  } finally {
+    globalThis.window = previousWindow;
+  }
+});
+
+function memoryStorage(initial: Record<string, string> = {}): StorageLike {
+  const values = new Map(Object.entries(initial));
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  };
+}

@@ -21,5 +21,6 @@ await build({
 });
 
 await cp(resolve(root, "desktop/main.cjs"), resolve(outDir, "main.cjs"));
+await cp(resolve(root, "desktop/preload.cjs"), resolve(outDir, "preload.cjs"));
 
 console.log("Desktop runtime built in dist-electron");

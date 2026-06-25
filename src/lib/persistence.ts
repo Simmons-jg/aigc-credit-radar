@@ -2,9 +2,15 @@ import type { PlatformRecord } from "../types";
 
 const recordsStorageKey = "aigc-credit-radar-records";
 
-interface StorageLike {
+export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+}
+
+declare global {
+  interface Window {
+    aigcCreditRadarStorage?: StorageLike;
+  }
 }
 
 export function mergeStoredRecords(defaultRecords: PlatformRecord[], storedRecords: PlatformRecord[]): PlatformRecord[] {
@@ -41,9 +47,11 @@ export function mergeStoredRecords(defaultRecords: PlatformRecord[], storedRecor
   return [...mergedDefaults, ...userAddedRecords];
 }
 
-export function loadPlatformRecords(defaultRecords: PlatformRecord[], storage: StorageLike = window.localStorage) {
+export function loadPlatformRecords(defaultRecords: PlatformRecord[], storage?: StorageLike) {
+  const primaryStorage = storage ?? defaultRecordsStorage();
+
   try {
-    const raw = storage.getItem(recordsStorageKey);
+    const raw = readStoredRecords(primaryStorage, storage === undefined);
     if (!raw) return defaultRecords;
     const stored = JSON.parse(raw) as PlatformRecord[];
     if (!Array.isArray(stored)) return defaultRecords;
@@ -53,6 +61,22 @@ export function loadPlatformRecords(defaultRecords: PlatformRecord[], storage: S
   }
 }
 
-export function savePlatformRecords(records: PlatformRecord[], storage: StorageLike = window.localStorage) {
+export function savePlatformRecords(records: PlatformRecord[], storage: StorageLike = defaultRecordsStorage()) {
   storage.setItem(recordsStorageKey, JSON.stringify(records));
+}
+
+function defaultRecordsStorage(): StorageLike {
+  return window.aigcCreditRadarStorage ?? window.localStorage;
+}
+
+function readStoredRecords(primaryStorage: StorageLike, allowLocalStorageMigration: boolean) {
+  const raw = primaryStorage.getItem(recordsStorageKey);
+  if (raw || !allowLocalStorageMigration || !window.aigcCreditRadarStorage) return raw;
+
+  const localRaw = window.localStorage.getItem(recordsStorageKey);
+  if (localRaw) {
+    primaryStorage.setItem(recordsStorageKey, localRaw);
+  }
+
+  return localRaw;
 }

@@ -26,3 +26,8 @@ test("desktop packer keeps OCR assets only in the built renderer output", async 
   const source = await readFile(new URL("./pack-desktop-folder.mjs", import.meta.url), "utf8");
   assert.match(source, /public", "ocr"/);
 });
+
+test("desktop build copies the preload script for durable storage", async () => {
+  const source = await readFile(new URL("./build-desktop.mjs", import.meta.url), "utf8");
+  assert.match(source, /preload\.cjs/);
+});

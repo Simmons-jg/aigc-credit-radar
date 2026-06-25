@@ -23,6 +23,13 @@ test("parseBrowserCreditText extracts a short OCR-only balance", () => {
   assert.equal(result?.currencyLabel, "credits");
 });
 
+test("parseBrowserCreditText extracts the final balance from noisy Lovart OCR", () => {
+  const result = parseBrowserCreditText("43600 FAR &\n0 BS 3500");
+
+  assert.equal(result?.creditsRemaining, 3500);
+  assert.equal(result?.currencyLabel, "credits");
+});
+
 test("parseBrowserCreditText rejects text without a balance-like label", () => {
   const result = parseBrowserCreditText("Starter plan includes 2,000 monthly credits");
 

@@ -22,6 +22,7 @@ const marketingTextPatterns = [
 
 const standaloneNumberPattern = /(^|[^\d.])([0-9][0-9,]*(?:\.\d+)?)(?![\d.])/g;
 const shortOcrTextLimit = 160;
+const maxLikelyCreditBalance = 200_000;
 
 export function parseBrowserCreditText(raw: string): BrowserCreditParseResult | undefined {
   const normalized = raw.replace(/\s+/g, " ").trim();
@@ -72,13 +73,27 @@ function parseStandaloneOcrBalance(text: string): BrowserCreditParseResult | und
   if (text.length > shortOcrTextLimit || looksLikeMarketingPlan(text, 0)) return undefined;
 
   const matches = [...text.matchAll(standaloneNumberPattern)];
-  if (matches.length !== 1) return undefined;
+  if (matches.length === 0) return undefined;
+  if (matches.length > 1 && looksLikeExplicitRatio(text)) return undefined;
 
-  const match = matches[0];
-  const amount = match[2];
+  const candidates = matches
+    .map((match) => ({
+      match,
+      amount: normalizeAmount(match[2]),
+    }))
+    .filter((candidate) => candidate.amount > 0 && candidate.amount <= maxLikelyCreditBalance);
+  if (candidates.length === 0) return undefined;
+
+  const candidate = candidates.length === 1 ? candidates[0] : candidates.at(-1);
+  if (!candidate) return undefined;
+
   return {
-    creditsRemaining: normalizeAmount(amount),
+    creditsRemaining: candidate.amount,
     currencyLabel: inferCurrencyLabel(text),
-    matchedText: match[0].trim(),
+    matchedText: candidate.match[0].trim(),
   };
+}
+
+function looksLikeExplicitRatio(text: string) {
+  return /\d[\d,]*(?:\.\d+)?\s*(?:\/|of|out\s+of)\s*\d[\d,]*(?:\.\d+)?/i.test(text);
 }

@@ -40,5 +40,8 @@ test("desktop shell includes tray, mini window, and native notification bridge",
   assert.match(mainSource, /createMiniWindow/);
   assert.match(mainSource, /Notification/);
   assert.match(mainSource, /aigc-credit-radar:show-notification/);
+  assert.match(mainSource, /aigc-credit-radar:update-alert-state/);
+  assert.match(mainSource, /flashFrame/);
   assert.match(preloadSource, /aigcCreditRadarDesktop/);
+  assert.match(preloadSource, /updateAlertState/);
 });

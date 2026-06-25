@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld("aigcCreditRadarDesktop", {
   showNotification(payload) {
     ipcRenderer.send("aigc-credit-radar:show-notification", payload);
   },
+  updateAlertState(payload) {
+    ipcRenderer.send("aigc-credit-radar:update-alert-state", payload);
+  },
   showMainWindow() {
     ipcRenderer.send("aigc-credit-radar:show-main-window");
   },

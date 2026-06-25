@@ -390,6 +390,86 @@ a {
   font-weight: 760;
 }
 
+.urgent-mode .command-bar {
+  border-color: color-mix(in srgb, var(--critical) 34%, var(--line));
+  background:
+    linear-gradient(135deg, rgb(180 35 24 / 0.12), rgb(255 255 255 / 0.7) 46%),
+    var(--panel);
+  box-shadow:
+    0 22px 58px rgb(180 35 24 / 0.14),
+    var(--shadow-soft);
+}
+
+.safe-mode.urgent-signal {
+  border-color: rgb(180 35 24 / 0.28);
+  background: #fff1ef;
+  color: var(--critical);
+}
+
+.urgent-alert-banner {
+  --alert-color: var(--critical);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--alert-color) 38%, var(--line));
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--alert-color) 13%, white), rgb(255 255 255 / 0.72)),
+    var(--panel);
+  box-shadow:
+    inset 4px 0 0 var(--alert-color),
+    0 22px 48px color-mix(in srgb, var(--alert-color) 13%, transparent);
+  padding: 12px 14px;
+}
+
+.urgent-alert-banner.veryCritical {
+  --alert-color: var(--very-critical);
+}
+
+.urgent-alert-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: inline-grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--alert-color) 13%, white);
+  color: var(--alert-color);
+}
+
+.urgent-alert-banner div:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.urgent-alert-banner strong {
+  color: #0b1117;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.urgent-alert-banner span {
+  color: #4f5d68;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.urgent-alert-action {
+  min-height: 34px;
+  border: 1px solid color-mix(in srgb, var(--alert-color) 28%, transparent);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--alert-color) 88%, white);
+  color: white;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 820;
+  text-decoration: none;
+}
+
 .headline-block h1 {
   margin: 0;
   max-width: 780px;
@@ -2018,6 +2098,16 @@ a {
   .overview-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+  }
+
+  .urgent-alert-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .urgent-alert-action {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-content: center;
   }
 
   .primary-risk,

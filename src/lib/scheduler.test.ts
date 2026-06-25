@@ -93,6 +93,7 @@ test("createRiskReminderCandidates creates one reminder per risk window", () => 
   );
 
   assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].level, "high");
   assert.match(candidates[0].title, /Higgsfield/);
   assert.match(candidates[0].body, /7d left/);
 });

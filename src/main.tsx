@@ -104,7 +104,8 @@ type OcrWorker = {
 };
 
 interface DesktopBridge {
-  showNotification(payload: { title: string; body: string; tag?: string }): void;
+  showNotification(payload: { title: string; body: string; tag?: string; level?: RiskLevel }): void;
+  updateAlertState(payload: { level?: RiskLevel; title?: string; body?: string; count?: number }): void;
   showMainWindow(): void;
   toggleMiniWindow(): void;
 }
@@ -355,6 +356,7 @@ function App() {
   const appShellRef = useRef<HTMLDivElement | null>(null);
   const scheduledRunInFlightRef = useRef(false);
   const [isMiniMode] = useState(() => window.location.hash === "#mini");
+  const [reminderTick, setReminderTick] = useState(0);
   const [language, setLanguage] = useState<Language>(initialLanguage);
   const [records, setRecords] = useState<PlatformRecord[]>(() => loadPlatformRecords(realModeRecords));
   const [summary, setSummary] = useState<FetchSummary>(initialFetchSummary);
@@ -380,6 +382,10 @@ function App() {
   const urgent = ranked
     .filter(({ risk }) => risk.level === "veryCritical" || risk.level === "critical" || risk.level === "high")
     .slice(0, 3);
+  const dueSoonItems = ranked.filter(
+    ({ risk }) => ["veryCritical", "critical", "high"].includes(risk.level) && risk.amountAtRisk > 0,
+  );
+  const dueSoonItem = dueSoonItems[0];
   const topRisk = ranked[0];
   const monitorSummary = useMemo(() => createMonitorSummary(visibleRecords, summary), [visibleRecords, summary]);
   const connectedCount = monitorSummary.connectedAccounts;
@@ -542,6 +548,35 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (isMiniMode) return;
+    const intervalId = window.setInterval(() => setReminderTick((current) => (current + 1) % 10_000), 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [isMiniMode]);
+
+  useEffect(() => {
+    if (isMiniMode || !window.aigcCreditRadarDesktop?.updateAlertState) return;
+
+    if (!dueSoonItem) {
+      window.aigcCreditRadarDesktop.updateAlertState({ count: 0 });
+      return;
+    }
+
+    const accountName = accountDisplayName(dueSoonItem.record, language);
+    window.aigcCreditRadarDesktop.updateAlertState({
+      count: dueSoonItems.length,
+      level: dueSoonItem.risk.level,
+      title:
+        language === "zh"
+          ? `${accountName} 剩余 ${dueSoonItem.risk.daysToReset} 天重置`
+          : `${accountName} resets in ${dueSoonItem.risk.daysToReset}d`,
+      body:
+        language === "zh"
+          ? "仍有余额，建议优先处理。"
+          : "Balance remains. Spend or fix this first.",
+    });
+  }, [dueSoonItem, dueSoonItems.length, isMiniMode, language]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const tick = async () => {
@@ -576,7 +611,7 @@ function App() {
     const canUseDesktopNotifications = Boolean(window.aigcCreditRadarDesktop?.showNotification);
     if (!canUseDesktopNotifications && notificationPermission !== "granted") return;
 
-    const candidates = createRiskReminderCandidates(ranked, language).filter(
+    const candidates = createRiskReminderCandidates(ranked, language, new Date()).filter(
       (candidate) => !scheduler.lastReminderKeys.includes(candidate.key),
     );
     if (candidates.length === 0) return;
@@ -603,7 +638,7 @@ function App() {
         candidates.map((candidate) => candidate.key),
       ),
     }));
-  }, [isMiniMode, language, notificationPermission, ranked, scheduler.enabled, scheduler.lastReminderKeys]);
+  }, [isMiniMode, language, notificationPermission, ranked, reminderTick, scheduler.enabled, scheduler.lastReminderKeys]);
 
   const setResetRule = (accountId: string, resetRule: ResetRule) => {
     setRecords((current) =>
@@ -1245,7 +1280,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell monitor-app" ref={appShellRef}>
+    <div className={`app-shell monitor-app ${dueSoonItem ? "urgent-mode" : ""}`} ref={appShellRef}>
       <main className="main monitor-main">
         <header className="command-bar js-app-enter">
           <div className="headline-block">
@@ -1254,9 +1289,13 @@ function App() {
                 <Zap size={17} />
               </span>
               <span>{strings.appName}</span>
-              <span className="safe-mode">
-                <ShieldCheck size={14} />
-                {strings.realMode}
+              <span className={`safe-mode ${dueSoonItem ? "urgent-signal" : ""}`}>
+                {dueSoonItem ? <CircleAlert size={14} /> : <ShieldCheck size={14} />}
+                {dueSoonItem
+                  ? language === "zh"
+                    ? "重置临近，已提醒。"
+                    : "Reset soon, alerts on."
+                  : strings.realMode}
               </span>
             </div>
             <h1>{strings.headline}</h1>
@@ -1283,6 +1322,7 @@ function App() {
             </button>
           </div>
         </header>
+        {dueSoonItem && <UrgentAlertBanner count={dueSoonItems.length} item={dueSoonItem} language={language} />}
 
         <section className="overview-grid js-app-enter" aria-label={strings.autoFetch}>
           <PrimaryRiskCard item={topRisk} language={language} />
@@ -2005,6 +2045,47 @@ function Metric({ label, value }: { label: string; value: string }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function UrgentAlertBanner({
+  count,
+  item,
+  language,
+}: {
+  count: number;
+  item: { record: PlatformRecord; risk: RiskAssessment };
+  language: Language;
+}) {
+  const amount = item.record.snapshot
+    ? `${item.record.snapshot.creditsRemaining} ${item.record.snapshot.currencyLabel}`
+    : language === "zh"
+      ? "仍有余额"
+      : "balance remains";
+  const accountName = accountDisplayName(item.record, language);
+
+  return (
+    <section className={`urgent-alert-banner ${item.risk.level} js-app-enter`}>
+      <div className="urgent-alert-icon">
+        <CircleAlert size={18} />
+      </div>
+      <div>
+        <strong>
+          {language === "zh"
+            ? `${accountName} 还有 ${item.risk.daysToReset} 天重置`
+            : `${accountName} resets in ${item.risk.daysToReset}d`}
+        </strong>
+        <span>
+          {language === "zh"
+            ? `${amount} 可能浪费；今天会发送桌面提醒。${count > 1 ? `还有 ${count - 1} 个紧急账号。` : ""}`
+            : `${amount} may be wasted. Desktop reminders are active today.${count > 1 ? ` ${count - 1} more urgent account(s).` : ""}`}
+        </span>
+      </div>
+      <a className="urgent-alert-action" href="#radar">
+        <Monitor size={15} />
+        {language === "zh" ? "查看台账" : "View ledger"}
+      </a>
+    </section>
   );
 }
 

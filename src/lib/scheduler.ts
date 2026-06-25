@@ -1,4 +1,4 @@
-import type { Language, PlatformRecord, RiskAssessment } from "../types";
+import type { Language, PlatformRecord, RiskAssessment, RiskLevel } from "../types";
 
 export const schedulerStorageKey = "aigc-credit-radar.scheduler.v1";
 export const dailyIntervalMs = 86_400_000;
@@ -14,6 +14,7 @@ export interface ReminderCandidate {
   title: string;
   body: string;
   tag: string;
+  level: RiskLevel;
 }
 
 export type RankedRiskItem = { record: PlatformRecord; risk: RiskAssessment };
@@ -97,6 +98,7 @@ export function createRiskReminderCandidates(items: RankedRiskItem[], language: 
 
       return {
         key,
+        level: risk.level,
         tag: `aigc-credit-radar:${record.account.id}:${windowKey}`,
         title:
           language === "zh"

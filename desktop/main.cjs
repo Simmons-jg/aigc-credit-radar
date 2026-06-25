@@ -10,6 +10,7 @@ let miniWindow;
 let tray;
 let helperModule;
 let isQuitting = false;
+let trayAlertState = { count: 0 };
 
 function storageFilePath() {
   return path.join(app.getPath("userData"), "storage.json");
@@ -134,10 +135,32 @@ function createTray() {
   if (tray) return;
 
   tray = new Tray(appIconPath());
-  tray.setToolTip("AIGC Credit Radar");
   tray.on("click", () => createMiniWindow());
+  updateTrayAlertState(trayAlertState);
+}
+
+function updateTrayAlertState(nextState = {}) {
+  trayAlertState = {
+    count: Number.isFinite(nextState.count) ? nextState.count : 0,
+    level: typeof nextState.level === "string" ? nextState.level : undefined,
+    title: typeof nextState.title === "string" ? nextState.title : undefined,
+    body: typeof nextState.body === "string" ? nextState.body : undefined,
+  };
+
+  if (!tray) return;
+
+  const hasUrgentRisk = trayAlertState.count > 0;
+  const alertLabel = hasUrgentRisk
+    ? `🚨 ${trayAlertState.count} urgent reset risk${trayAlertState.count > 1 ? "s" : ""}`
+    : "No urgent reset risks";
+  tray.setToolTip(hasUrgentRisk ? `AIGC Credit Radar\n${trayAlertState.title ?? alertLabel}` : "AIGC Credit Radar");
   tray.setContextMenu(
     Menu.buildFromTemplate([
+      {
+        label: alertLabel,
+        enabled: false,
+      },
+      { type: "separator" },
       {
         label: "Open Credit Radar",
         click: showMainWindow,
@@ -158,6 +181,20 @@ function createTray() {
   );
 }
 
+function isCriticalLevel(level) {
+  return level === "critical" || level === "veryCritical";
+}
+
+function flashUrgentWindows() {
+  for (const window of [mainWindow, miniWindow]) {
+    if (!window || window.isDestroyed()) continue;
+    window.flashFrame(true);
+    setTimeout(() => {
+      if (!window.isDestroyed()) window.flashFrame(false);
+    }, 10_000);
+  }
+}
+
 function registerDesktopHandlers() {
   ipcMain.on("aigc-credit-radar:show-notification", (_event, payload) => {
     if (!Notification.isSupported() || !payload || typeof payload !== "object") return;
@@ -172,6 +209,12 @@ function registerDesktopHandlers() {
     });
     notification.on("click", showMainWindow);
     notification.show();
+    if (isCriticalLevel(payload.level)) flashUrgentWindows();
+  });
+
+  ipcMain.on("aigc-credit-radar:update-alert-state", (_event, payload) => {
+    if (!payload || typeof payload !== "object") return;
+    updateTrayAlertState(payload);
   });
 
   ipcMain.on("aigc-credit-radar:show-main-window", showMainWindow);

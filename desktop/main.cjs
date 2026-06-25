@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, Notification, Tray, dialog, ipcMain, shell } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -6,7 +6,10 @@ const { pathToFileURL } = require("node:url");
 
 const helperBaseUrl = "http://127.0.0.1:8787";
 let mainWindow;
+let miniWindow;
+let tray;
 let helperModule;
+let isQuitting = false;
 
 function storageFilePath() {
   return path.join(app.getPath("userData"), "storage.json");
@@ -55,6 +58,126 @@ function registerStorageHandlers() {
   });
 }
 
+function appIconPath() {
+  const iconPath = path.join(app.getAppPath(), "public", "aigc-credit-radar-icon.ico");
+  if (fs.existsSync(iconPath)) return iconPath;
+  return path.join(app.getAppPath(), "public", "aigc-credit-radar-icon.svg");
+}
+
+function loadRenderer(window, hash) {
+  if (process.env.VITE_DEV_SERVER_URL) {
+    const url = new URL(process.env.VITE_DEV_SERVER_URL);
+    if (hash) url.hash = hash;
+    void window.loadURL(url.href);
+    return;
+  }
+
+  void window.loadFile(path.join(app.getAppPath(), "dist", "index.html"), hash ? { hash } : undefined);
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function createMiniWindow() {
+  if (miniWindow && !miniWindow.isDestroyed()) {
+    miniWindow.isVisible() ? miniWindow.hide() : miniWindow.show();
+    if (miniWindow.isVisible()) miniWindow.focus();
+    return;
+  }
+
+  miniWindow = new BrowserWindow({
+    width: 390,
+    height: 520,
+    minWidth: 330,
+    minHeight: 420,
+    title: "Credit Radar Mini",
+    icon: appIconPath(),
+    backgroundColor: "#edf3f3",
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, "preload.cjs"),
+      sandbox: true,
+    },
+  });
+
+  miniWindow.once("ready-to-show", () => {
+    miniWindow.show();
+  });
+
+  miniWindow.on("close", (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    miniWindow.hide();
+  });
+
+  miniWindow.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: "deny" };
+  });
+
+  loadRenderer(miniWindow, "mini");
+}
+
+function createTray() {
+  if (tray) return;
+
+  tray = new Tray(appIconPath());
+  tray.setToolTip("AIGC Credit Radar");
+  tray.on("click", () => createMiniWindow());
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: "Open Credit Radar",
+        click: showMainWindow,
+      },
+      {
+        label: "Show Mini Radar",
+        click: () => createMiniWindow(),
+      },
+      { type: "separator" },
+      {
+        label: "Quit",
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
+}
+
+function registerDesktopHandlers() {
+  ipcMain.on("aigc-credit-radar:show-notification", (_event, payload) => {
+    if (!Notification.isSupported() || !payload || typeof payload !== "object") return;
+    const title = typeof payload.title === "string" ? payload.title : "AIGC Credit Radar";
+    const body = typeof payload.body === "string" ? payload.body : "";
+    if (!body.trim()) return;
+
+    const notification = new Notification({
+      title,
+      body,
+      icon: appIconPath(),
+    });
+    notification.on("click", showMainWindow);
+    notification.show();
+  });
+
+  ipcMain.on("aigc-credit-radar:show-main-window", showMainWindow);
+  ipcMain.on("aigc-credit-radar:toggle-mini-window", () => createMiniWindow());
+}
+
 app.setAppUserModelId("com.aigc.creditradar");
 
 function helperHealthCheck() {
@@ -98,7 +221,7 @@ function createWindow() {
     minWidth: 980,
     minHeight: 680,
     title: "AIGC Credit Radar",
-    icon: path.join(app.getAppPath(), "public", "aigc-credit-radar-icon.svg"),
+    icon: appIconPath(),
     backgroundColor: "#edf3f3",
     show: false,
     webPreferences: {
@@ -112,6 +235,16 @@ function createWindow() {
   mainWindow.once("ready-to-show", () => {
     if (rendererSmoke) return;
     mainWindow.show();
+  });
+
+  mainWindow.on("close", (event) => {
+    if (isQuitting || rendererSmoke) return;
+    event.preventDefault();
+    mainWindow.hide();
+  });
+
+  mainWindow.on("closed", () => {
+    mainWindow = undefined;
   });
 
   if (rendererSmoke) {
@@ -154,16 +287,12 @@ function createWindow() {
     void shell.openExternal(url);
   });
 
-  if (process.env.VITE_DEV_SERVER_URL) {
-    void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-    return;
-  }
-
-  void mainWindow.loadFile(path.join(app.getAppPath(), "dist", "index.html"));
+  loadRenderer(mainWindow);
 }
 
 app.whenReady().then(async () => {
   registerStorageHandlers();
+  registerDesktopHandlers();
   await startBundledHelper();
 
   if (process.env.AIGC_CREDIT_RADAR_ELECTRON_SMOKE === "1") {
@@ -172,16 +301,19 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+  createTray();
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    showMainWindow();
   });
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (process.platform === "darwin") return;
+  if (!tray) app.quit();
 });
 
 app.on("before-quit", () => {
+  isQuitting = true;
   void helperModule?.stopLocalHelper?.();
 });

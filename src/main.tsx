@@ -103,6 +103,12 @@ type OcrWorker = {
   terminate: () => Promise<unknown>;
 };
 
+interface DesktopBridge {
+  showNotification(payload: { title: string; body: string; tag?: string }): void;
+  showMainWindow(): void;
+  toggleMiniWindow(): void;
+}
+
 type HiggsfieldConnectionState = ConnectorConnectionState;
 
 interface HiggsfieldHelperResponse {
@@ -348,6 +354,7 @@ function dreaminaStatusMessage(strings: ReturnType<typeof t>, body: DreaminaMess
 function App() {
   const appShellRef = useRef<HTMLDivElement | null>(null);
   const scheduledRunInFlightRef = useRef(false);
+  const [isMiniMode] = useState(() => window.location.hash === "#mini");
   const [language, setLanguage] = useState<Language>(initialLanguage);
   const [records, setRecords] = useState<PlatformRecord[]>(() => loadPlatformRecords(realModeRecords));
   const [summary, setSummary] = useState<FetchSummary>(initialFetchSummary);
@@ -380,6 +387,7 @@ function App() {
     () => (scheduler.enabled ? nextScheduledRunAt(visibleRecords, scheduler) : ""),
     [scheduler, visibleRecords],
   );
+  const isDesktopApp = Boolean(window.aigcCreditRadarDesktop);
 
   useGSAP(
     () => {
@@ -396,8 +404,22 @@ function App() {
   );
 
   useEffect(() => {
+    if (isMiniMode) return;
     savePlatformRecords(records);
-  }, [records]);
+  }, [isMiniMode, records]);
+
+  useEffect(() => {
+    if (!isMiniMode) return;
+
+    const reloadRecords = () => setRecords(loadPlatformRecords(realModeRecords));
+    const intervalId = window.setInterval(reloadRecords, 5_000);
+    window.addEventListener("focus", reloadRecords);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", reloadRecords);
+    };
+  }, [isMiniMode]);
 
   useEffect(() => {
     window.localStorage.setItem(schedulerStorageKey, JSON.stringify(scheduler));
@@ -487,6 +509,11 @@ function App() {
   };
 
   const handleSchedulerButton = async () => {
+    if (isDesktopApp) {
+      setScheduler((current) => ({ ...current, enabled: !current.enabled }));
+      return;
+    }
+
     if (scheduler.enabled && notificationPermission === "granted") {
       setScheduler((current) => ({ ...current, enabled: false }));
       return;
@@ -518,6 +545,7 @@ function App() {
     let cancelled = false;
 
     const tick = async () => {
+      if (isMiniMode) return;
       if (cancelled || scheduledRunInFlightRef.current || syncStatus === "running") return;
       if (!isScheduledSyncDue(visibleRecords, scheduler, new Date())) return;
 
@@ -540,10 +568,13 @@ function App() {
       window.clearInterval(intervalId);
       window.removeEventListener("focus", tick);
     };
-  }, [scheduler.enabled, scheduler.lastAutoRunAt, syncStatus, visibleRecords]);
+  }, [isMiniMode, scheduler.enabled, scheduler.lastAutoRunAt, syncStatus, visibleRecords]);
 
   useEffect(() => {
-    if (!scheduler.enabled || notificationPermission !== "granted") return;
+    if (isMiniMode || !scheduler.enabled) return;
+
+    const canUseDesktopNotifications = Boolean(window.aigcCreditRadarDesktop?.showNotification);
+    if (!canUseDesktopNotifications && notificationPermission !== "granted") return;
 
     const candidates = createRiskReminderCandidates(ranked, language).filter(
       (candidate) => !scheduler.lastReminderKeys.includes(candidate.key),
@@ -552,10 +583,14 @@ function App() {
 
     for (const candidate of candidates.slice(0, 3)) {
       try {
-        new Notification(candidate.title, {
-          body: candidate.body,
-          tag: candidate.tag,
-        });
+        if (canUseDesktopNotifications) {
+          window.aigcCreditRadarDesktop?.showNotification(candidate);
+        } else {
+          new Notification(candidate.title, {
+            body: candidate.body,
+            tag: candidate.tag,
+          });
+        }
       } catch {
         break;
       }
@@ -568,7 +603,7 @@ function App() {
         candidates.map((candidate) => candidate.key),
       ),
     }));
-  }, [language, notificationPermission, ranked, scheduler.enabled, scheduler.lastReminderKeys]);
+  }, [isMiniMode, language, notificationPermission, ranked, scheduler.enabled, scheduler.lastReminderKeys]);
 
   const setResetRule = (accountId: string, resetRule: ResetRule) => {
     setRecords((current) =>
@@ -1192,11 +1227,22 @@ function App() {
   };
   const schedulerButtonLabel = !scheduler.enabled
     ? strings.enableSchedule
-    : notificationPermission === "granted"
+    : isDesktopApp || notificationPermission === "granted"
       ? strings.schedulerOn
       : notificationPermission === "denied"
         ? strings.notificationsBlocked
         : strings.enableAlerts;
+
+  if (isMiniMode) {
+    return (
+      <MiniRadarWindow
+        items={ranked}
+        language={language}
+        schedulerEnabled={scheduler.enabled}
+        syncStatus={syncStatus}
+      />
+    );
+  }
 
   return (
     <div className="app-shell monitor-app" ref={appShellRef}>
@@ -1959,6 +2005,97 @@ function Metric({ label, value }: { label: string; value: string }) {
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function MiniRadarWindow({
+  items,
+  language,
+  schedulerEnabled,
+  syncStatus,
+}: {
+  items: Array<{ record: PlatformRecord; risk: RiskAssessment }>;
+  language: Language;
+  schedulerEnabled: boolean;
+  syncStatus: "idle" | "running" | "done";
+}) {
+  const strings = t(language);
+  const locale = language === "zh" ? "zh-CN" : "en-US";
+  const topItem = items[0];
+  const urgentItems = items
+    .filter(({ risk }) => ["veryCritical", "critical", "high", "medium"].includes(risk.level))
+    .slice(0, 4);
+  const openMainWindow = () => window.aigcCreditRadarDesktop?.showMainWindow();
+
+  return (
+    <main className="mini-shell">
+      <header className="mini-header">
+        <div className="mini-brand">
+          <span className="brand-icon">
+            <Zap size={16} />
+          </span>
+          <div>
+            <strong>{strings.appName}</strong>
+            <span>{schedulerEnabled ? strings.schedulerOn : strings.enableSchedule}</span>
+          </div>
+        </div>
+        <span className={`mini-sync ${syncStatus}`}>
+          {syncStatus === "running" ? <RefreshCw className="spin" size={14} /> : <Bell size={14} />}
+        </span>
+      </header>
+
+      {topItem ? (
+        <section className={`mini-top-card ${topItem.risk.level}`}>
+          <span>{strings.primaryAlert}</span>
+          <h1>{accountDisplayName(topItem.record, language)}</h1>
+          <div className="mini-balance">
+            <strong>{topItem.record.snapshot?.creditsRemaining ?? "--"}</strong>
+            <small>{topItem.record.snapshot?.currencyLabel ?? (language === "zh" ? "等待抓取" : "waiting")}</small>
+          </div>
+          <div className="mini-meta-grid">
+            <div>
+              <span>{strings.reset}</span>
+              <strong>{formatDate(topItem.risk.resetDate, locale)}</strong>
+            </div>
+            <div>
+              <span>{strings.riskWindow}</span>
+              <strong>{topItem.risk.daysToReset}d</strong>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="mini-empty">
+          <strong>{language === "zh" ? "还没有账号" : "No accounts yet"}</strong>
+          <p>{language === "zh" ? "打开主窗口添加平台余额。" : "Open the main window to add balances."}</p>
+        </section>
+      )}
+
+      <section className="mini-list">
+        <div className="mini-section-title">
+          <strong>{strings.actionQueue}</strong>
+          <span>{language === "zh" ? "前 4 项" : "Top 4"}</span>
+        </div>
+        {urgentItems.length > 0 ? (
+          urgentItems.map(({ record, risk }) => (
+            <article className="mini-row" key={record.account.id}>
+              <span className={`action-dot ${risk.level}`} />
+              <div>
+                <strong>{accountDisplayName(record, language)}</strong>
+                <small>{formatRelative(record.snapshot?.capturedAt ?? record.lastRun?.finishedAt, locale)}</small>
+              </div>
+              <b>{risk.daysToReset}d</b>
+            </article>
+          ))
+        ) : (
+          <p className="mini-muted">{strings.noUrgentAction}</p>
+        )}
+      </section>
+
+      <button className="mini-main-button" onClick={openMainWindow} type="button">
+        <Monitor size={15} />
+        {language === "zh" ? "打开主窗口" : "Open main window"}
+      </button>
+    </main>
   );
 }
 
@@ -2771,6 +2908,7 @@ function AdapterTile({ record, risk, language }: { record: PlatformRecord; risk:
 
 declare global {
   interface Window {
+    aigcCreditRadarDesktop?: DesktopBridge;
     __aigcCreditRadarRoot?: Root;
   }
 }

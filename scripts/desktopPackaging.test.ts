@@ -31,3 +31,14 @@ test("desktop build copies the preload script for durable storage", async () => 
   const source = await readFile(new URL("./build-desktop.mjs", import.meta.url), "utf8");
   assert.match(source, /preload\.cjs/);
 });
+
+test("desktop shell includes tray, mini window, and native notification bridge", async () => {
+  const mainSource = await readFile(new URL("../desktop/main.cjs", import.meta.url), "utf8");
+  const preloadSource = await readFile(new URL("../desktop/preload.cjs", import.meta.url), "utf8");
+
+  assert.match(mainSource, /Tray/);
+  assert.match(mainSource, /createMiniWindow/);
+  assert.match(mainSource, /Notification/);
+  assert.match(mainSource, /aigc-credit-radar:show-notification/);
+  assert.match(preloadSource, /aigcCreditRadarDesktop/);
+});

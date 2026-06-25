@@ -41,3 +41,31 @@ test("parseBrowserCreditText rejects ambiguous OCR text with multiple numbers", 
 
   assert.equal(result, undefined);
 });
+
+test("parseBrowserCreditText rejects OpenArt trial tooltip OCR noise", () => {
+  const result = parseBrowserCreditText("2 @D®\nTrial credits allow you to use all the\npremium features.", {
+    platform: "openart",
+    source: "ocr",
+  });
+
+  assert.equal(result, undefined);
+});
+
+test("parseBrowserCreditText accepts a cleaned OpenArt badge digit", () => {
+  const result = parseBrowserCreditText("5", {
+    platform: "openart",
+    source: "ocr",
+  });
+
+  assert.equal(result?.creditsRemaining, 5);
+  assert.equal(result?.currencyLabel, "credits");
+});
+
+test("parseBrowserCreditText rejects OpenArt trial tooltip pasted text noise", () => {
+  const result = parseBrowserCreditText("8 Trial credits allow you to use all the premium features.", {
+    platform: "openart",
+    source: "pasted_text",
+  });
+
+  assert.equal(result, undefined);
+});

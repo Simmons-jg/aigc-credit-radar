@@ -53,6 +53,7 @@ import { browserConnectionStatesFromRecords, connectionStateFromRecord } from ".
 import { createMonitorSummary, type MonitorSummary } from "./lib/monitorSummary";
 import { imageFileFromClipboardItems } from "./lib/clipboardImage";
 import { createTesseractOcrOptions, ocrErrorMessage } from "./lib/ocrAssets";
+import { createOpenArtCreditBadgeOcrFile } from "./lib/openArtOcrCrop";
 import {
   primaryAccountId,
   removeAccountRecord,
@@ -98,6 +99,7 @@ type OcrProgress = {
 
 type OcrWorker = {
   recognize: (image: File) => Promise<{ data: { text: string } }>;
+  setParameters?: (parameters: Record<string, string>) => Promise<unknown>;
   terminate: () => Promise<unknown>;
 };
 
@@ -2053,7 +2055,7 @@ function BrowserBalanceImport({
     platform === customManualPlatformId ? customName.trim() : platformDisplayName(platform, language);
 
   const parseText = () => {
-    const parsed = parseBrowserCreditText(pageText);
+    const parsed = parseBrowserCreditText(pageText, { platform, source: "pasted_text" });
     if (!parsed) {
       setMessage(language === "zh" ? "没有识别到余额。可以直接手动填写余额。" : "No balance found. You can still enter the balance manually.");
       return;
@@ -2077,6 +2079,39 @@ function BrowserBalanceImport({
 
     try {
       const { createWorker } = await import("tesseract.js");
+      if (platform === "openart") {
+        setMessage(language === "zh" ? "正在优化 OpenArt 积分截图..." : "Optimizing the OpenArt credit badge...");
+        const badgeFile = await createOpenArtCreditBadgeOcrFile(file).catch(() => undefined);
+        if (badgeFile) {
+          worker = (await createWorker("eng", 1, {
+            ...createTesseractOcrOptions(),
+          })) as OcrWorker;
+          await worker.setParameters?.({
+            tessedit_char_whitelist: "0123456789",
+            tessedit_pageseg_mode: "10",
+          });
+
+          const badgeResult = await worker.recognize(badgeFile);
+          const badgeText = badgeResult.data.text.trim();
+          const badgeParsed = parseBrowserCreditText(badgeText, { platform, source: "ocr" });
+          await worker.terminate().catch((error) => console.error("OCR worker terminate failed", error));
+          worker = undefined;
+
+          if (badgeParsed) {
+            setPageText(badgeText);
+            setBalance(String(badgeParsed.creditsRemaining));
+            setCurrencyLabel(badgeParsed.currencyLabel);
+            setImportSource("ocr");
+            setMessage(
+              language === "zh"
+                ? `OpenArt 徽章已识别：${badgeParsed.creditsRemaining} ${badgeParsed.currencyLabel}`
+                : `OpenArt badge detected: ${badgeParsed.creditsRemaining} ${badgeParsed.currencyLabel}`,
+            );
+            return;
+          }
+        }
+      }
+
       worker = (await createWorker("eng", 1, {
         ...createTesseractOcrOptions(),
         logger: (progress: OcrProgress) => {
@@ -2096,7 +2131,7 @@ function BrowserBalanceImport({
       const text = result.data.text.trim();
       setPageText(text);
 
-      const parsed = parseBrowserCreditText(text);
+      const parsed = parseBrowserCreditText(text, { platform, source: "ocr" });
       if (!parsed) {
         setMessage(language === "zh" ? "OCR 完成，但没有识别到余额；请手动填写或换一张更清晰的截图。" : "OCR finished, but no balance was detected. Enter it manually or try a clearer screenshot.");
         return;

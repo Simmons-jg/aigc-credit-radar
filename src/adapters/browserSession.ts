@@ -5,6 +5,11 @@ export interface BrowserCreditParseResult {
   matchedText: string;
 }
 
+export interface BrowserCreditParseOptions {
+  platform?: string;
+  source?: "manual" | "pasted_text" | "ocr" | "browser";
+}
+
 const labelBeforeNumberPatterns = [
   /\b(?:current\s+balance|credits?\s+balance|tokens?\s+remaining|remaining\s+tokens?|available\s+credits?|available\s+tokens?|balance)\b[^0-9]{0,48}([0-9][0-9,]*(?:\.\d+)?)/i,
   /(?:当前余额|可用积分|剩余积分|积分余额|可用点数|剩余点数|余额)[^0-9]{0,48}([0-9][0-9,]*(?:\.\d+)?)/i,
@@ -23,8 +28,9 @@ const marketingTextPatterns = [
 const standaloneNumberPattern = /(^|[^\d.])([0-9][0-9,]*(?:\.\d+)?)(?![\d.])/g;
 const shortOcrTextLimit = 160;
 const maxLikelyCreditBalance = 200_000;
+const openArtTrialTooltipPattern = /\btrial\s+credits\s+allow\s+you\s+to\s+use\b/i;
 
-export function parseBrowserCreditText(raw: string): BrowserCreditParseResult | undefined {
+export function parseBrowserCreditText(raw: string, options: BrowserCreditParseOptions = {}): BrowserCreditParseResult | undefined {
   const normalized = raw.replace(/\s+/g, " ").trim();
   if (!normalized) return undefined;
 
@@ -50,7 +56,7 @@ export function parseBrowserCreditText(raw: string): BrowserCreditParseResult | 
     }
   }
 
-  const standaloneBalance = parseStandaloneOcrBalance(normalized);
+  const standaloneBalance = parseStandaloneOcrBalance(normalized, options);
   if (standaloneBalance) return standaloneBalance;
 
   return undefined;
@@ -69,8 +75,9 @@ function looksLikeMarketingPlan(text: string, matchIndex: number) {
   return marketingTextPatterns.some((pattern) => pattern.test(window));
 }
 
-function parseStandaloneOcrBalance(text: string): BrowserCreditParseResult | undefined {
+function parseStandaloneOcrBalance(text: string, options: BrowserCreditParseOptions): BrowserCreditParseResult | undefined {
   if (text.length > shortOcrTextLimit || looksLikeMarketingPlan(text, 0)) return undefined;
+  if (options.platform === "openart" && openArtTrialTooltipPattern.test(text)) return undefined;
 
   const matches = [...text.matchAll(standaloneNumberPattern)];
   if (matches.length === 0) return undefined;
